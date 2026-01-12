@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Green AI | Pune 2027 Smart Forecast</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { 
+            --accent: #0ea5e9; 
+            --green: #10b981; 
+            --light-bg: #f1f5f9; 
+            --glass-card: rgba(255, 255, 255, 0.9); 
+        }
+        
+        body { background: var(--light-bg); color: #1e293b; font-family: 'Inter', system-ui, sans-serif; }
+        
+        /* Snow-Glass UI */
+        .glass-card { 
+            background: var(--glass-card); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,1); 
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        
+        .navbar { 
+            background: #ffffff; 
+            border-bottom: 1px solid #e2e8f0; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        #map { 
+            height: 600px; 
+            border-radius: 20px; 
+            border: 4px solid #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        .kpi-box { padding: 25px; text-align: center; }
+        .kpi-box i { font-size: 2rem; margin-bottom: 12px; color: var(--accent); }
+        .kpi-val { font-size: 1.8rem; font-weight: 800; display: block; color: #0f172a; }
+        .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px; color: #64748b; font-weight: 600; }
+
+        .table { color: #1e293b; }
+        .table thead th { color: #64748b; font-weight: 600; font-size: 0.75rem; border-bottom: 2px solid #f1f5f9; }
+        
+        .loading-overlay { 
+            position: fixed; top:0; left:0; width:100%; height:100%; 
+            background: #ffffff; z-index:9999; display:flex; flex-direction:column;
+            justify-content:center; align-items:center; 
+        }
+
+        /* UHI Color badges */
+        .uhi-low { color: #10b981; }
+        .uhi-med { color: #f59e0b; }
+        .uhi-high { color: #ef4444; }
+
+        /* Custom Popup Style */
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 5px; }
+        .leaflet-popup-tip { background: white; }
+    </style>
+</head>
+<body>
+
+<div id="loader" class="loading-overlay">
+    <div class="spinner-border text-info" style="width: 3rem; height: 3rem;"></div>
+    <h4 class="mt-4 fw-light text-secondary">Computing 2027 Climate Models...</h4>
+</div>
+
+<nav class="navbar navbar-light sticky-top py-3">
+    <div class="container">
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
+            <i class="fa-solid fa-leaf text-success me-2"></i>
+            <span>GREEN AI <span class="fw-light text-info">| Pune 2027</span></span>
+        </a>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-info-subtle text-info border border-info-subtle me-3 px-3 py-2">SCIENTIFIC FORECAST</span>
+            <div id="last-updated" class="small text-muted fw-medium">Checking Sensors...</div>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="glass-card kpi-box">
+                <i class="fa-solid fa-temperature-high"></i>
+                <span class="kpi-val" id="kpi-temp">--°C</span>
+                <span class="kpi-label">Forecasted Avg</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card kpi-box">
+                <i class="fa-solid fa-droplet-slash"></i>
+                <span class="kpi-val text-warning" id="kpi-uhi">--</span>
+                <span class="kpi-label">UHI Intensity Index</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card kpi-box">
+                <i class="fa-solid fa-wind"></i>
+                <span class="kpi-val" id="kpi-density">--</span>
+                <span class="kpi-label">Air Density (kg/m³)</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card kpi-box">
+                <i class="fa-solid fa-tree text-success"></i>
+                <span class="kpi-val text-success" id="kpi-trees">--</span>
+                <span class="kpi-label">Neems Required</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 pb-5">
+        <div class="col-lg-8">
+            <div class="glass-card p-2">
+                <div id="map"></div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="glass-card p-4 h-100">
+                <h5 class="fw-bold mb-4 d-flex justify-content-between">
+                    <span>Zone Intelligence</span>
+                    <i class="fa-solid fa-chart-line text-muted"></i>
+                </h5>
+                <div class="overflow-auto" style="max-height: 480px;">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr class="small text-uppercase">
+                                <th>Zone</th>
+                                <th>UHI Index</th>
+                                <th>Air Density</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // Initialize Map with Light Mode (CartoDB Positron)
+    let map = L.map('map').setView([18.55, 73.85], 11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    async function initDashboard() {
+        try {
+            const response = await fetch('/api/predict');
+            const data = await response.json();
+            
+            let totalTemp = 0, totalUHI = 0, totalDensity = 0, totalTrees = 0;
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = ""; 
+
+            data.forEach(item => {
+                // Calculation Logic
+                const density = (1.225 * (288.15 / (item.future_temp + 273.15))).toFixed(3);
+                const uhi_index = (item.delta * 0.85).toFixed(1); 
+
+                totalTemp += item.future_temp;
+                totalUHI += parseFloat(uhi_index);
+                totalDensity += parseFloat(density);
+                totalTrees += item.needed;
+
+                // Marker Logic: Red for High UHI, Green for Low
+                const hue = uhi_index > 4.5 ? '#ef4444' : '#10b981';
+                
+                L.circleMarker([item.lat, item.lon], {
+                    radius: 12, weight: 3, color: '#fff', fillColor: hue, fillOpacity: 0.8
+                }).addTo(map).bindPopup(`
+                    <div style="font-family: 'Inter', sans-serif; padding: 5px;">
+                        <strong style="font-size: 1.1rem;">${item.zone}</strong>
+                        <hr style="margin: 8px 0;">
+                        <div style="display: flex; justify-content: space-between; gap: 20px;">
+                            <span>2027 Temp:</span> <b>${item.future_temp}°C</b>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>UHI Index:</span> <b style="color:${hue}">${uhi_index}</b>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Density:</span> <b>${density}</b>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; color: #059669; font-weight: bold;">
+                             Req: +${item.needed.toLocaleString()} Neems
+                        </div>
+                    </div>
+                `);
+
+                // Update Table
+                tableBody.innerHTML += `
+                    <tr>
+                        <td><span class="fw-bold">${item.zone}</span></td>
+                        <td><span class="badge ${uhi_index > 4.5 ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success'} px-2">${uhi_index}</span></td>
+                        <td class="text-muted small">${density}</td>
+                        <td class="text-end fw-bold text-success">+${item.needed.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            // Update Global KPIs
+            document.getElementById('kpi-temp').innerText = (totalTemp / data.length).toFixed(1) + "°C";
+            document.getElementById('kpi-uhi').innerText = (totalUHI / data.length).toFixed(1);
+            document.getElementById('kpi-density').innerText = (totalDensity / data.length).toFixed(3);
+            document.getElementById('kpi-trees').innerText = totalTrees.toLocaleString();
+            document.getElementById('last-updated').innerText = "FORECAST ACTIVE: 2027";
+
+            document.getElementById('loader').style.display = 'none';
+        } catch (err) {
+            console.error("Dashboard Sync Error:", err);
+            document.getElementById('loader').innerHTML = `<div class="alert alert-danger">API Connection Lost. Check if app.py is running.</div>`;
+        }
+    }
+
+    initDashboard();
+</script>
+</body>
+</html>
